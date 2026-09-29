@@ -46,11 +46,10 @@ def get_llm():
         )
 
     return ChatGoogleGenerativeAI(
-        model=os.getenv("GOOGLE_MODEL", "gemini-3.8-flash"),
-        temperature=0,
-        google_api_key=api_key,
-    )
-
+    model="gemini-2.5-flash",
+    temperature=0,
+    google_api_key=api_key,
+)
 
 def scope_node(state: AgentState):
     llm = get_llm().with_structured_output(ScopeResult)
