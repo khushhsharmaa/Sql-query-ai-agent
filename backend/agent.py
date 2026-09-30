@@ -107,7 +107,7 @@ def optimization_node(state: AgentState):
     result = llm.invoke(OPTIMIZE_PROMPT.format(
         sql=state["sql"], schema=state["schema"]
     ))
-    return {"optimization": result.text.strip()}
+    return {"optimization": result.content.strip()}
 
 
 def execute_node(state: AgentState):
@@ -121,7 +121,7 @@ def execute_node(state: AgentState):
 def explain_node(state: AgentState):
     llm = get_llm()
     result = llm.invoke(EXPLAIN_PROMPT.format(sql=state["sql"]))
-    return {"explanation": result.text.strip()}
+    return {"explanation": result.content.strip()}
 
 
 def build_graph():
