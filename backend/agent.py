@@ -46,7 +46,7 @@ def get_llm():
         )
 
     return ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
+    model="gemini-3.7-flash",
     temperature=0,
     google_api_key=api_key,
 )
@@ -107,7 +107,7 @@ def optimization_node(state: AgentState):
     result = llm.invoke(OPTIMIZE_PROMPT.format(
         sql=state["sql"], schema=state["schema"]
     ))
-    return {"optimization": result.content.strip()}
+    return {"optimization": result.text.strip()}
 
 
 def execute_node(state: AgentState):
@@ -121,7 +121,7 @@ def execute_node(state: AgentState):
 def explain_node(state: AgentState):
     llm = get_llm()
     result = llm.invoke(EXPLAIN_PROMPT.format(sql=state["sql"]))
-    return {"explanation": result.content.strip()}
+    return {"explanation": result.text.strip()}
 
 
 def build_graph():
