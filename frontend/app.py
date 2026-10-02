@@ -3,8 +3,18 @@ import requests
 import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
+from streamlit.errors import StreamlitSecretNotFoundError
 
 load_dotenv()
+
+
+def _get_setting(name: str, default: str = "") -> str:
+    try:
+        value = st.secrets.get(name)
+    except StreamlitSecretNotFoundError:
+        value = None
+    return str(value or os.getenv(name, default))
+
 
 st.set_page_config(
     page_title="SQL Query AI Agent",
@@ -12,7 +22,7 @@ st.set_page_config(
     layout="wide",
 )
 
-API_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000").rstrip("/")
+API_URL = _get_setting("BACKEND_URL", "http://127.0.0.1:8000").rstrip("/")
 # Worst case: several sequential Gemini calls at 15s each. Keep the UI bounded.
 REQUEST_TIMEOUT_SECONDS = 70
 

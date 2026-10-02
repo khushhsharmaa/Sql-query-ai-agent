@@ -74,6 +74,34 @@ streamlit run frontend/app.py
 
 Open the Streamlit URL shown in the terminal, normally `http://localhost:8501`.
 
+## Deployment
+
+### Render backend
+
+The root `render.yaml` defines a Render web service for the FastAPI backend.
+Create a Blueprint from this repository in Render and provide `GROQ_API_KEY`
+as a secret environment variable when prompted. The Blueprint sets
+`LLM_PROVIDER=groq`, the configured Groq model, and the `/health` health check.
+After deployment, verify `https://<your-render-service>.onrender.com/health`.
+
+The SQLite database is initialized and seeded when the backend starts. It is
+ephemeral on Render, so database changes are not durable across instance
+replacements or restarts.
+
+### Streamlit Community Cloud frontend
+
+Deploy `frontend/app.py` from this repository on Streamlit Community Cloud.
+In the app's Secrets settings, set the backend URL to the public Render service:
+
+```toml
+BACKEND_URL = "https://<your-render-service>.onrender.com"
+```
+
+The frontend reads `BACKEND_URL` from Streamlit secrets first, then from the
+process environment or local `.env` file, and finally defaults to the local
+backend URL. Keep provider API keys configured on Render only; they are not
+needed by the frontend.
+
 ## Example prompts
 
 - Show all employees hired after January 2024.
