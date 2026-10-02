@@ -12,6 +12,7 @@ A task-oriented AI agent that converts natural-language database questions into 
 - CSV download
 - FastAPI backend
 - Streamlit frontend
+- Google Gemini and Groq LLM providers
 - Basic automated tests
 
 ## Setup
@@ -34,21 +35,34 @@ pip install -r requirements.txt
 
 ### 3. Configure the API key
 
-Copy `.env.example` to `.env` and set:
+Copy `.env.example` to `.env` and configure the provider you want to use:
 
 ```text
-OPENAI_API_KEY=your_key_here
+LLM_PROVIDER=groq
+GROQ_API_KEY=your_key_here
+GROQ_MODEL=qwen/qwen3.8-27b
+BACKEND_URL=http://127.0.0.1:8000
 ```
 
-Never commit `.env`.
+For Gemini, set `LLM_PROVIDER=gemini`, `GOOGLE_API_KEY`, and optionally `GEMINI_MODEL`. Never commit `.env`.
+
+`BACKEND_URL` is used by the Streamlit UI. For a remote backend (for example a Render service), set it to that public URL.
 
 ### 4. Start the backend
 
 From the project root:
 
 ```powershell
-python -m uvicorn backend.main:app --reload --port 8000
+python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 ```
+
+On Render / similar hosts:
+
+```bash
+python -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+```
+
+Set the API key for the selected provider (`GROQ_API_KEY` or `GOOGLE_API_KEY`).
 
 ### 5. Start the frontend
 

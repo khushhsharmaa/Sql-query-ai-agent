@@ -1,5 +1,3 @@
-import io
-import json
 import os
 import requests
 import pandas as pd
@@ -14,7 +12,9 @@ st.set_page_config(
     layout="wide",
 )
 
-API_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+API_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000").rstrip("/")
+# Worst case: several sequential Gemini calls at 15s each. Keep the UI bounded.
+REQUEST_TIMEOUT_SECONDS = 70
 
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -37,6 +37,8 @@ with st.sidebar:
     st.divider()
     st.write("**Scope:** SQL and database questions only.")
     st.write("**Safety:** SELECT/WITH queries only.")
+    st.write(f"**Backend:** `{API_URL}`")
+    st.write(f"**Provider:** `{os.getenv('LLM_PROVIDER', 'gemini').lower()}`")
 
 question = st.text_area(
     "Ask your database question",
@@ -52,6 +54,28 @@ with col2:
         st.session_state.result = None
         st.rerun()
 
+
+def _user_error_from_http(response: requests.Response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+    if isinstance(payload, dict):
+        code = payload.get("error_code")
+        message = payload.get("message") or payload.get("detail")
+        if code and message:
+            return f"{code}: {message}"
+        if message:
+            return str(message)
+        if isinstance(payload.get("detail"), dict):
+            detail = payload["detail"]
+            code = detail.get("error_code")
+            message = detail.get("message")
+            if code and message:
+                return f"{code}: {message}"
+    return f"Backend returned HTTP {response.status_code}."
+
+
 if ask:
     if not question.strip():
         st.warning("Please enter a question.")
@@ -61,50 +85,74 @@ if ask:
                 response = requests.post(
                     f"{API_URL}/query",
                     json={"question": question.strip()},
-                    timeout=120,
+                    timeout=REQUEST_TIMEOUT_SECONDS,
                 )
-                response.raise_for_status()
-                result = response.json()
-                st.session_state.result = result
-                st.session_state.history.append({
-                    "question": question.strip(),
-                    "result": result,
-                })
+                try:
+                    result = response.json()
+                except ValueError:
+                    result = None
+
+                if response.ok and isinstance(result, dict):
+                    st.session_state.result = result
+                    st.session_state.history.append({
+                        "question": question.strip(),
+                        "result": result,
+                    })
+                elif isinstance(result, dict):
+                    st.session_state.result = result
+                    if not result.get("error_code"):
+                        st.error(_user_error_from_http(response))
+                else:
+                    st.session_state.result = None
+                    st.error(_user_error_from_http(response))
+            except requests.Timeout:
+                st.session_state.result = None
+                st.error("GEMINI_TIMEOUT: The backend did not respond in time. The Gemini provider may be slow or unavailable.")
+            except requests.ConnectionError:
+                st.session_state.result = None
+                st.error(f"Could not connect to the backend at {API_URL}. Start FastAPI and check BACKEND_URL.")
             except requests.RequestException as exc:
-                st.error(f"Could not connect to the backend: {exc}")
+                st.session_state.result = None
+                st.error(f"Backend request failed: {exc}")
 
 result = st.session_state.result
 
 if result:
-    if not result.get("in_scope", True):
+    error_code = result.get("error_code")
+    if error_code:
+        st.error(f"{error_code}: {result.get('message', 'The Gemini provider failed.')}")
+    elif not result.get("in_scope", True):
         st.warning(result.get("message", "This request is outside the supported scope."))
+    elif "could not be executed" in result.get("message", "").lower() or "validation failed" in result.get("message", "").lower():
+        st.error(result.get("message"))
     else:
         st.success(result.get("message", "Done"))
 
+    if result.get("sql"):
         st.subheader("Generated SQL")
         st.code(result.get("sql", ""), language="sql")
 
-        if result.get("explanation"):
-            st.subheader("Explanation")
-            st.write(result["explanation"])
+    if result.get("explanation"):
+        st.subheader("Explanation")
+        st.write(result["explanation"])
 
-        if result.get("optimization"):
-            st.subheader("Optimization suggestions")
-            st.write(result["optimization"])
+    if result.get("optimization"):
+        st.subheader("Optimization suggestions")
+        st.write(result["optimization"])
 
-        rows = result.get("rows", [])
-        columns = result.get("columns", [])
-        if rows:
-            st.subheader("Results")
-            df = pd.DataFrame(rows, columns=columns or None)
-            st.dataframe(df, use_container_width=True)
+    rows = result.get("rows", [])
+    columns = result.get("columns", [])
+    if rows:
+        st.subheader("Results")
+        df = pd.DataFrame(rows, columns=columns or None)
+        st.dataframe(df, use_container_width=True)
 
-            csv = df.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                "Download CSV",
-                data=csv,
-                file_name="query_results.csv",
-                mime="text/csv",
-            )
-        else:
-            st.info("The query returned no rows.")
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Download CSV",
+            data=csv,
+            file_name="query_results.csv",
+            mime="text/csv",
+        )
+    elif result.get("in_scope", True) and result.get("sql") and not error_code:
+        st.info("The query returned no rows.")

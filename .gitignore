@@ -1,7 +1,12 @@
 __pycache__/
-*.pyc
+*.py[cod]
 .pytest_cache/
 .venv/
 .env
+.env.*
+!.env.example
 data/*.db
 .vscode/
+.streamlit/secrets.toml
+*.log
+*.err
